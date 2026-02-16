@@ -5,12 +5,18 @@ class alu_transaction_object;
 	bit [7:0] exp_dout;
 	
 	function void print(string tag="");
+      if(tag=="Driver")begin
+         $display("[%s] A=%0h B=%0h",tag, A, B);
+      end
+      
+      else begin
 		 $display("[%s] A=%0h B=%0h EXP=%0h DUT=%0h",tag, A, B,exp_dout,dut_dout);
+      end
+      
 	endfunction
 endclass
 
 class alu_driver;
-
 	virtual inf vif;
 	mailbox drv_mbx;
 	
@@ -21,8 +27,8 @@ class alu_driver;
 			item.print("Driver");
 			
 			@(posedge vif.clk);
-			vif.A=item.A;
-			vif.B=item.B;
+			vif.A <= item.A;   // Non-blocking
+			vif.B <= item.B;   // Non-blocking
 		end
 	 endtask
 endclass
@@ -33,21 +39,18 @@ class alu_monitor;
 	mailbox sco_mbx;
 	
 	task run();
-		
-		bit [3:0] a,b;
-		
 		forever begin
-		@(posedge vif.clk);
-		a=vif.A;
-		b=vif.B;
-		@(posedge vif.clk);
-		alu_transaction_object item;
-		item=new();
-		item.A=a;
-		item.B=b;
-		item.dut_dout=vif.dout;
-		
-		sco_mbx.put(item);
+			alu_transaction_object item;
+			
+			@(posedge vif.clk);
+			#1;  // Small delay to ensure driver updates have settled
+			
+			item = new();
+			item.A = vif.A;           
+			item.B = vif.B;
+			item.dut_dout = vif.dout; 
+			
+			sco_mbx.put(item);
 		end
 	endtask
 endclass
@@ -165,8 +168,9 @@ module tb;
 	);
 		
 	initial begin
-		clk=0;
-		alu_test t0=new();
+		alu_test t0;
+      	t0=new();
+      	clk=0;
 		t0.env.vif=a1;
 		t0.run();
 		#200 $finish;
